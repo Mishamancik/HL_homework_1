@@ -6,6 +6,7 @@ import (
 
 	"github.com/mikhail/hometask1/internal/api"
 	"github.com/mikhail/hometask1/internal/config"
+	"github.com/mikhail/hometask1/internal/metrics"
 	"github.com/mikhail/hometask1/internal/store"
 )
 
@@ -15,15 +16,26 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
+	collector, err := metrics.New(cfg.PodID, cfg.Datacenter)
+	if err != nil {
+		log.Fatalf("metrics: %v", err)
+	}
+
 	srv := api.NewServer(store.New())
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", srv.Health)
-	mux.HandleFunc("POST /items", srv.CreateItem)
-	mux.HandleFunc("GET /items/{id}", srv.GetItem)
-	mux.HandleFunc("PUT /items/{id}", srv.UpdateItem)
+	rt := api.NewRouter(collector)
+
+	// Business routes — instrumented (golden signals).
+	rt.Handle("POST", "/items", srv.CreateItem)
+	rt.Handle("GET", "/items/{id}", srv.GetItem)
+	rt.Handle("PUT", "/items/{id}", srv.UpdateItem)
+
+	// Service routes — not instrumented.
+	rt.HandleRawFunc("GET /health", srv.Health)
+	rt.HandleRaw("GET /metrics", metrics.Handler())
+	rt.HandleRawFunc("GET /handlers", rt.HandlersJSON)
 
 	log.Printf("listening on %s (pod=%s dc=%s)", cfg.ListenAddr, cfg.PodID, cfg.Datacenter)
-	if err := http.ListenAndServe(cfg.ListenAddr, mux); err != nil {
+	if err := http.ListenAndServe(cfg.ListenAddr, rt); err != nil {
 		log.Fatalf("server: %v", err)
 	}
 }

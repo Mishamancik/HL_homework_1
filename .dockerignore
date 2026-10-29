@@ -1,0 +1,10 @@
+.git
+.bin
+bin
+local
+.env
+*.md
+.dockerignore
+Dockerfile
+docker-compose.yml
+deploy
