@@ -69,3 +69,22 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  dashboard-gen:
+    image: hometask1-app:local
+    build: .
+    entrypoint: ["/usr/local/bin/dashboard-gen"]
+    environment:
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_USER: ${GRAFANA_ADMIN_USER}
+      GRAFANA_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      APP_HANDLERS_URL: http://app-msk:8080/handlers
+      PROMETHEUS_DATASOURCE_UID: prometheus
+    depends_on:
+      app-msk:
+        condition: service_healthy
+      app-spb:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
+    restart: "no"
