@@ -163,7 +163,7 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 			},
 			"reqps",
 		))
-		// Errors by status code
+		// Errors by status code as a share of all requests for this handler.
 		panels = append(panels, timeseriesPanel(
 			1000+i*10+3,
 			title+" — Errors",
@@ -171,11 +171,13 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 			ds,
 			[]queryTarget{
 				{RefID: "A", Legend: "{{code}}", Expr: fmt.Sprintf(
-					`sum by (code) (rate(http_requests_total{handler="%s",code=~"4..|5..",datacenter=~"$datacenter",pod_id=~"$pod_id"}[$__rate_interval]))`,
-					h.Handler,
+					// Denominator has no "code" label — must use on()/group_left (or scalar),
+					// otherwise Prometheus returns an empty vector ("No data").
+					`sum by (code) (rate(http_requests_total{handler=%q,code=~"4..|5..",datacenter=~"$datacenter",pod_id=~"$pod_id"}[$__rate_interval])) / on() group_left() clamp_min(sum(rate(http_requests_total{handler=%q,datacenter=~"$datacenter",pod_id=~"$pod_id"}[$__rate_interval])), 1e-9)`,
+					h.Handler, h.Handler,
 				)},
 			},
-			"reqps",
+			"percentunit",
 		))
 		y += 8
 	}
