@@ -16,15 +16,17 @@ type HandlerInfo struct {
 
 // Router registers instrumented business routes and exposes /handlers.
 type Router struct {
-	mux      *http.ServeMux
-	metrics  *metrics.Collector
-	handlers []HandlerInfo
+	mux          *http.ServeMux
+	metrics      *metrics.Collector
+	handlers     []HandlerInfo
+	fault500Rate float64
 }
 
-func NewRouter(m *metrics.Collector) *Router {
+func NewRouter(m *metrics.Collector, fault500Rate float64) *Router {
 	return &Router{
-		mux:     http.NewServeMux(),
-		metrics: m,
+		mux:          http.NewServeMux(),
+		metrics:      m,
+		fault500Rate: fault500Rate,
 	}
 }
 
@@ -36,7 +38,8 @@ func (rt *Router) Handle(method, path string, h http.HandlerFunc) {
 		Path:    path,
 		Handler: id,
 	})
-	rt.mux.HandleFunc(method+" "+path, rt.metrics.Middleware(id, h))
+	// Fault injection is inside metrics middleware so 500s are observed.
+	rt.mux.HandleFunc(method+" "+path, rt.metrics.Middleware(id, WithFault500(rt.fault500Rate, h)))
 }
 
 // HandleRaw registers a non-instrumented route (health, metrics, handlers).

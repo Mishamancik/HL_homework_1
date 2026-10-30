@@ -22,7 +22,7 @@ func main() {
 	}
 
 	srv := api.NewServer(store.New())
-	rt := api.NewRouter(collector)
+	rt := api.NewRouter(collector, cfg.Fault500Rate)
 
 	// Business routes — instrumented (golden signals).
 	rt.Handle("POST", "/items", srv.CreateItem)
@@ -34,7 +34,7 @@ func main() {
 	rt.HandleRaw("GET /metrics", metrics.Handler())
 	rt.HandleRawFunc("GET /handlers", rt.HandlersJSON)
 
-	log.Printf("listening on %s (pod=%s dc=%s)", cfg.ListenAddr, cfg.PodID, cfg.Datacenter)
+	log.Printf("listening on %s (pod=%s dc=%s fault500=%.3f)", cfg.ListenAddr, cfg.PodID, cfg.Datacenter, cfg.Fault500Rate)
 	if err := http.ListenAndServe(cfg.ListenAddr, rt); err != nil {
 		log.Fatalf("server: %v", err)
 	}
