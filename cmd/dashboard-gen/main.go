@@ -164,6 +164,9 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 			"reqps",
 		))
 		// Errors by status code as a share of all requests for this handler.
+		// Fixed [1m] (not $__rate_interval): right after compose restart Prometheus
+		// has only a few scrapes; a long auto interval makes sparse 4xx/5xx series
+		// look like "No data" while RPS already draws.
 		panels = append(panels, timeseriesPanel(
 			1000+i*10+3,
 			title+" — Errors",
@@ -173,7 +176,7 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 				{RefID: "A", Legend: "{{code}}", Expr: fmt.Sprintf(
 					// Denominator has no "code" label — must use on()/group_left (or scalar),
 					// otherwise Prometheus returns an empty vector ("No data").
-					`sum by (code) (rate(http_requests_total{handler=%q,code=~"4..|5..",datacenter=~"$datacenter",pod_id=~"$pod_id"}[$__rate_interval])) / on() group_left() clamp_min(sum(rate(http_requests_total{handler=%q,datacenter=~"$datacenter",pod_id=~"$pod_id"}[$__rate_interval])), 1e-9)`,
+					`sum by (code) (rate(http_requests_total{handler=%q,code=~"4..|5..",datacenter=~"$datacenter",pod_id=~"$pod_id"}[1m])) / on() group_left() clamp_min(sum(rate(http_requests_total{handler=%q,datacenter=~"$datacenter",pod_id=~"$pod_id"}[1m])), 1e-9)`,
 					h.Handler, h.Handler,
 				)},
 			},

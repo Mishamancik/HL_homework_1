@@ -51,7 +51,7 @@ docker compose up -d --build
 
 Порядок: apps → Prometheus → Grafana → `dashboard-gen` (once) → `load` (пока стек жив).
 
-Нагрузка: ~3% GET на missing id → 404; `FAULT_500_RATE` в app → ~3% 500.
+Нагрузка: ~5% GET на missing id → 404; `FAULT_500_RATE` в app → ~5% 500.
 
 ## Метрики
 

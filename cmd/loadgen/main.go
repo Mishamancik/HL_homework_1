@@ -72,6 +72,11 @@ func main() {
 	log.Printf("loadgen targets=%v target_rps=%.1f ramp=%s err404=%.2f workers=%d",
 		targets, targetRPS, ramp, err404, workers)
 
+	// Seed intentional 404s on every target so Prometheus series exist before the
+	// first rate() window fills (otherwise Grafana Errors panels show "No data"
+	// for tens of seconds after compose restart).
+	seedMissing(client, targets)
+
 	started := time.Now()
 	rr := 0
 	for {
@@ -88,8 +93,16 @@ func main() {
 	}
 }
 
+func seedMissing(client *http.Client, targets []string) {
+	for _, base := range targets {
+		for i := 0; i < 5; i++ {
+			_, _ = do(client, http.MethodGet, base+"/items/missing-seed-"+strconv.Itoa(i), nil)
+		}
+	}
+}
+
 func currentRPS(elapsed, ramp time.Duration, target float64) float64 {
-	const floor = 2.0
+	const floor = 8.0
 	if ramp <= 0 || elapsed >= ramp {
 		return target
 	}
