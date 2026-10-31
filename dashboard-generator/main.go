@@ -136,24 +136,11 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 
 	for i, h := range handlers {
 		title := h.Handler
-		// Latency: p50 / p95 / p99
+		// Traffic (RPS) — leftmost
 		panels = append(panels, timeseriesPanel(
 			1000+i*10+1,
-			title+" — Latency",
+			title+" — Traffic",
 			0, y, 8, 8,
-			ds,
-			[]queryTarget{
-				{RefID: "A", Legend: "p50", Expr: histogramQuantile(0.50, h.Handler)},
-				{RefID: "B", Legend: "p95", Expr: histogramQuantile(0.95, h.Handler)},
-				{RefID: "C", Legend: "p99", Expr: histogramQuantile(0.99, h.Handler)},
-			},
-			"s",
-		))
-		// RPS
-		panels = append(panels, timeseriesPanel(
-			1000+i*10+2,
-			title+" — RPS",
-			8, y, 8, 8,
 			ds,
 			[]queryTarget{
 				{RefID: "A", Legend: "rps", Expr: fmt.Sprintf(
@@ -163,10 +150,23 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 			},
 			"reqps",
 		))
+		// Latency: p50 / p95 / p99
+		panels = append(panels, timeseriesPanel(
+			1000+i*10+2,
+			title+" — Latency",
+			8, y, 8, 8,
+			ds,
+			[]queryTarget{
+				{RefID: "A", Legend: "p50", Expr: histogramQuantile(0.50, h.Handler)},
+				{RefID: "B", Legend: "p95", Expr: histogramQuantile(0.95, h.Handler)},
+				{RefID: "C", Legend: "p99", Expr: histogramQuantile(0.99, h.Handler)},
+			},
+			"s",
+		))
 		// Errors by status code as a share of all requests for this handler.
 		// Fixed [1m] (not $__rate_interval): right after compose restart Prometheus
 		// has only a few scrapes; a long auto interval makes sparse 4xx/5xx series
-		// look like "No data" while RPS already draws.
+		// look like "No data" while Traffic already draws.
 		panels = append(panels, timeseriesPanel(
 			1000+i*10+3,
 			title+" — Errors",

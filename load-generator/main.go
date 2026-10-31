@@ -21,7 +21,10 @@ func main() {
 	targets := splitCSV(envOr("TARGETS", "http://app-msk:8080,http://app-spb:8080"))
 	targetRPS := envFloat("TARGET_RPS", 40)
 	ramp := envDuration("RAMP_DURATION", 3*time.Minute)
-	err404 := envFloat("ERROR_404_RATE", 0.03)
+	// Env is the desired ~share of 404 among GET on the Errors panel. Intentional
+	// missing-ID GETs are ~1/3 of traffic mix (with POST/PUT), so divide by 3
+	// when sampling against all requests.
+	err404 := envFloat("ERROR_404_RATE", 0.03) / 3
 	workers := envInt("WORKERS", 32)
 
 	if len(targets) == 0 {
@@ -115,7 +118,7 @@ func currentRPS(elapsed, ramp time.Duration, target float64) float64 {
 }
 
 func doRequest(client *http.Client, base string, pool *idPool, err404 float64) (int, error) {
-	// ~3% intentional 404s; rest mix of create/get/update on known IDs for this target.
+	// Intentional 404s via missing IDs; rest mix of create/get/update on known IDs.
 	if rand.Float64() < err404 {
 		return do(client, http.MethodGet, base+"/items/missing-"+strconv.FormatInt(rand.Int63(), 36), nil)
 	}
