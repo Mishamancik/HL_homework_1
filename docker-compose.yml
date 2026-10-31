@@ -7,6 +7,9 @@ services:
       POD_ID: msk001
       LISTEN_ADDR: ":8080"
       FAULT_500_RATE: ${FAULT_500_RATE:-0.03}
+      LATENCY_JITTER_MS: ${LATENCY_JITTER_MS:-2}
+      LATENCY_TAIL_RATE: ${LATENCY_TAIL_RATE:-0.08}
+      LATENCY_TAIL_MS: ${LATENCY_TAIL_MS:-40}
     ports:
       - "8081:8080"
     healthcheck:
@@ -24,6 +27,9 @@ services:
       POD_ID: spb001
       LISTEN_ADDR: ":8080"
       FAULT_500_RATE: ${FAULT_500_RATE:-0.03}
+      LATENCY_JITTER_MS: ${LATENCY_JITTER_MS:-2}
+      LATENCY_TAIL_RATE: ${LATENCY_TAIL_RATE:-0.08}
+      LATENCY_TAIL_MS: ${LATENCY_TAIL_MS:-40}
     ports:
       - "8082:8080"
     healthcheck:

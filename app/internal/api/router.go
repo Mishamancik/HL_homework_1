@@ -20,13 +20,15 @@ type Router struct {
 	metrics      *metrics.Collector
 	handlers     []HandlerInfo
 	fault500Rate float64
+	latency      LatencyJitter
 }
 
-func NewRouter(m *metrics.Collector, fault500Rate float64) *Router {
+func NewRouter(m *metrics.Collector, fault500Rate float64, latency LatencyJitter) *Router {
 	return &Router{
 		mux:          http.NewServeMux(),
 		metrics:      m,
 		fault500Rate: fault500Rate,
+		latency:      latency,
 	}
 }
 
@@ -38,8 +40,10 @@ func (rt *Router) Handle(method, path string, h http.HandlerFunc) {
 		Path:    path,
 		Handler: id,
 	})
-	// Fault injection is inside metrics middleware so 500s are observed.
-	rt.mux.HandleFunc(method+" "+path, rt.metrics.Middleware(id, WithFault500(rt.fault500Rate, h)))
+	// Jitter + fault injection sit inside metrics middleware so latency/500s are observed.
+	rt.mux.HandleFunc(method+" "+path, rt.metrics.Middleware(id,
+		WithLatencyJitter(rt.latency, WithFault500(rt.fault500Rate, h)),
+	))
 }
 
 // HandleRaw registers a non-instrumented route (health, metrics, handlers).

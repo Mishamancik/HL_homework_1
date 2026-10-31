@@ -22,7 +22,12 @@ func main() {
 	}
 
 	srv := api.NewServer(store.New())
-	rt := api.NewRouter(collector, cfg.Fault500Rate)
+	latency := api.LatencyJitter{
+		BaseMaxMs: cfg.LatencyBaseMs,
+		TailRate:  cfg.LatencyTailRate,
+		TailMaxMs: cfg.LatencyTailMs,
+	}
+	rt := api.NewRouter(collector, cfg.Fault500Rate, latency)
 
 	// Business routes — instrumented (golden signals).
 	rt.Handle("POST", "/items", srv.CreateItem)
@@ -34,7 +39,9 @@ func main() {
 	rt.HandleRaw("GET /metrics", metrics.Handler())
 	rt.HandleRawFunc("GET /handlers", rt.HandlersJSON)
 
-	log.Printf("listening on %s (pod=%s dc=%s fault500=%.3f)", cfg.ListenAddr, cfg.PodID, cfg.Datacenter, cfg.Fault500Rate)
+	log.Printf("listening on %s (pod=%s dc=%s fault500=%.3f jitter=%dms tail=%.0f%%/%dms)",
+		cfg.ListenAddr, cfg.PodID, cfg.Datacenter, cfg.Fault500Rate,
+		cfg.LatencyBaseMs, cfg.LatencyTailRate*100, cfg.LatencyTailMs)
 	if err := http.ListenAndServe(cfg.ListenAddr, rt); err != nil {
 		log.Fatalf("server: %v", err)
 	}
