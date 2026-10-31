@@ -98,6 +98,7 @@ services:
       TARGET_RPS: ${TARGET_RPS:-40}
       RAMP_DURATION: ${RAMP_DURATION:-3m}
       ERROR_404_RATE: ${ERROR_404_RATE:-0.03}
+      ERROR_409_RATE: ${ERROR_409_RATE:-0.03}
       WORKERS: ${LOAD_WORKERS:-32}
     depends_on:
       dashboard-generator:

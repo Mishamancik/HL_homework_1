@@ -16,15 +16,16 @@ import (
 )
 
 // Background load: ramps to TARGET_RPS across TARGETS, hits all CRUD handlers,
-// injects a small share of 404s via missing IDs. Runs until the process is stopped.
+// injects a small share of 404s (missing GET) and 409s (duplicate POST).
+// Runs until the process is stopped.
 func main() {
 	targets := splitCSV(envOr("TARGETS", "http://app-msk:8080,http://app-spb:8080"))
 	targetRPS := envFloat("TARGET_RPS", 40)
 	ramp := envDuration("RAMP_DURATION", 3*time.Minute)
-	// Env is the desired ~share of 404 among GET on the Errors panel. Intentional
-	// missing-ID GETs are ~1/3 of traffic mix (with POST/PUT), so divide by 3
-	// when sampling against all requests.
+	// Env is the desired ~share on the Errors panel for that handler. Intentional
+	// error requests are ~1/3 of traffic mix, so divide by 3 when sampling against all.
 	err404 := envFloat("ERROR_404_RATE", 0.03) / 3
+	err409 := envFloat("ERROR_409_RATE", 0.03) / 3
 	workers := envInt("WORKERS", 32)
 
 	if len(targets) == 0 {
@@ -53,7 +54,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			for idx := range jobs {
-				status, err := doRequest(client, targets[idx], pools[idx], err404)
+				status, err := doRequest(client, targets[idx], pools[idx], err404, err409)
 				sentCount.Add(1)
 				if err != nil || status >= 400 {
 					errCount.Add(1)
@@ -72,13 +73,13 @@ func main() {
 		}
 	}()
 
-	log.Printf("loadgen targets=%v target_rps=%.1f ramp=%s err404=%.2f workers=%d",
-		targets, targetRPS, ramp, err404, workers)
+	log.Printf("loadgen targets=%v target_rps=%.1f ramp=%s err404=%.2f err409=%.2f workers=%d",
+		targets, targetRPS, ramp, err404, err409, workers)
 
-	// Seed intentional 404s on every target so Prometheus series exist before the
-	// first rate() window fills (otherwise Grafana Errors panels show "No data"
-	// for tens of seconds after compose restart).
+	// Seed intentional 404/409 series before the first rate() window fills
+	// (otherwise Grafana Errors panels show "No data" after compose restart).
 	seedMissing(client, targets)
+	seedConflict(client, targets)
 
 	started := time.Now()
 	rr := 0
@@ -96,10 +97,23 @@ func main() {
 	}
 }
 
+const conflictID = "conflict-seed"
+
 func seedMissing(client *http.Client, targets []string) {
 	for _, base := range targets {
 		for i := 0; i < 5; i++ {
 			_, _ = do(client, http.MethodGet, base+"/items/missing-seed-"+strconv.Itoa(i), nil)
+		}
+	}
+}
+
+func seedConflict(client *http.Client, targets []string) {
+	body := fmt.Sprintf(`{"id":%q,"name":"conflict"}`, conflictID)
+	for _, base := range targets {
+		// Create once, then a few duplicate POSTs so the 409 series exists early.
+		_, _ = do(client, http.MethodPost, base+"/items", []byte(body))
+		for i := 0; i < 4; i++ {
+			_, _ = do(client, http.MethodPost, base+"/items", []byte(body))
 		}
 	}
 }
@@ -117,10 +131,15 @@ func currentRPS(elapsed, ramp time.Duration, target float64) float64 {
 	return rps
 }
 
-func doRequest(client *http.Client, base string, pool *idPool, err404 float64) (int, error) {
-	// Intentional 404s via missing IDs; rest mix of create/get/update on known IDs.
+func doRequest(client *http.Client, base string, pool *idPool, err404, err409 float64) (int, error) {
+	// Intentional 404s via missing IDs.
 	if rand.Float64() < err404 {
 		return do(client, http.MethodGet, base+"/items/missing-"+strconv.FormatInt(rand.Int63(), 36), nil)
+	}
+	// Intentional 409s via duplicate POST of a fixed id (not used for manual tests).
+	if rand.Float64() < err409 {
+		body := fmt.Sprintf(`{"id":%q,"name":"conflict"}`, conflictID)
+		return do(client, http.MethodPost, base+"/items", []byte(body))
 	}
 
 	id := pool.randomOrEmpty()
