@@ -6,7 +6,9 @@
 
 ![alt text](media/dashboard.png)
 
-На дашборде 9 графиков с golden signals для разных ручек. Целиком стенд для этой работы выглядит вот так:
+На дашборде 9 графиков с golden signals для разных ручек. Посмотреть скринкаст разбора можно [на диске](https://drive.google.com/file/d/18Gz18HjPBf8Cu8NAbnIsxbQ0klyTCSt5/view?usp=share_link) или [в репозитории](media/screencast.mp4).
+
+Схематично стенд для этой работы выглядит вот так:
 
 ![alt text](<media/overview.png>)
 
