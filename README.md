@@ -1,66 +1,88 @@
-# Items API — мониторинг золотых сигналов
+# TASK1 — Инструменты автоматизации в Grafana
 
-Go CRUD с Prometheus-метриками, двумя инстансами за compose, автогенерацией Grafana-дашборда и фоновой нагрузкой.
+![alt text](<media/scheme.png>)
 
-## Быстрый старт
+По этой схеме `dashboard-generator` автоматически создает дашборд в Grafana.
 
+![alt text](media/dashboard.png)
+
+На дашборде 9 графиков с golden signals для разных ручек. Целиком стенд для этой работы выглядит вот так:
+
+![alt text](<media/overview.png>)
+
+---
+
+## Как запустить решение
+
+Запустить стенд
 ```bash
 cp .env.example .env
 docker compose up -d --build
 ```
 
-Через 2–3 минуты: Grafana → дашборд **Items API — golden signals**, данные под нагрузкой.
+Посмотреть дашборд в браузере
+```
+http://localhost:3000/login
+```
 
-Остановка: `docker compose down`
+Остановить стенд
+```bash
+docker compose down -v
+```
 
-## Порты
+---
+
+## Какие порты использовались
 
 | Сервис | Порт | Назначение |
 |---|---|---|
-| app-msk (`pod-msk-1`) | 8081 | Первый инстанс приложения (CRUD + `/metrics`) |
-| app-spb (`pod-spb-1`) | 8082 | Второй инстанс приложения |
-| Prometheus | 9090 | scrape обоих app |
-| Grafana | 3000 | дашборд (логин и пароль `admin` либо задать свой через `.env`) |
+| app-msk | 8081 | Первый инстанс приложения |
+| app-spb | 8082 | Второй инстанс приложения |
+| prometheus | 9090 | Выполняет scrape обоих app |
+| grafana | 3000 | Дашборд (логин и пароль `admin` либо в `.env`) |
 
-Секреты только в `.env` (см. `.env.example`, `.env` в `.gitignore`).
+---
 
-## Ручки приложения
-
-| Метод | Путь | Метрики |
-|---|---|---|
-| `POST` | `/items` | да |
-| `GET` | `/items/{id}` | да |
-| `PUT` | `/items/{id}` | да |
-| `GET` | `/health` | нет |
-| `GET` | `/metrics` | нет (Prometheus scrape) |
-| `GET` | `/handlers` | нет (список бизнес-ручек для генератора) |
-
-Хранилище — in-memory. Без `POD_ID` и `DATACENTER` процесс не стартует.
-
-## Три сервиса — три образа
-
-| Папка | Образ | Роль |
-|---|---|---|
-| `app/` | `hometask1-app:local` | HTTP CRUD + `/metrics` + `/handlers` (`app-msk`, `app-spb`) |
-| `dashboard-gen/` | `hometask1-dashboard-gen:local` | тянет `/handlers`, публикует non-editable дашборд |
-| `loadgen/` | `hometask1-loadgen:local` | ramp до ~20–50 RPS на оба инстанса |
-
-Конфиги Prometheus/Grafana — в `configs/` (bind-mount в compose).
-
-Порядок: apps → Prometheus → Grafana → `dashboard-gen` (once) → `load` (пока стек жив).
-
-Нагрузка: ~5% GET на missing id → 404; `FAULT_500_RATE` в app → ~5% 500.
-
-## Метрики
+## Какие метрики и лейблы были выбраны
 
 | Метрика | Тип | Лейблы |
 |---|---|---|
-| `http_request_duration_seconds` | **Histogram** | `handler` + const `pod_id`, `datacenter` |
+| `http_request_duration_seconds` | Histogram | `handler` + const `pod_id`, `datacenter` |
 | `http_requests_total` | Counter | `handler`, `code` + const `pod_id`, `datacenter` |
-
-`handler` — шаблон вида `GET /items/{id}` (не фактический URL).
 
 **Почему histogram для latency:** перцентили (p50/p95/p99) считаются через `histogram_quantile` по сумме бакетов (`sum by (le)`). Так агрегация по нескольким подам/ДЦ остаётся корректной. Summary даёт квантили на инстансе, но их некорректно складывать между репликами.
 
-RPS: `rate(http_requests_total[…])`.  
-Ошибки на дашборде: доля 4xx/5xx по `code` от всех запросов ручки.
+---
+
+## Приложение на go
+
+Проверить работу приложения:
+```bash
+curl -sS -X POST http://localhost:8081/items \
+  -H 'Content-Type: application/json' \
+  -d '{"id":"1","name":"widget"}'
+
+curl -sS http://localhost:8081/items/1
+
+curl -sS -X PUT http://localhost:8081/items/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"widget-v2"}'
+```
+
+---
+
+## Особенности проекта
+
+Порядок запуска: `Apps` → `Prometheus` → `Grafana` → `Dashboard-generator` → `Load-generator`.
+
+Конфиги Prometheus и Grafana лежат в `configs/` (bind-mount в compose).
+
+Доли GET-запросов с ошибками `ERROR_404_RATE` и `ERROR_500_RATE` задаются в `.env`
+
+Хранилище приложения сделано через in-memory CRUD. 
+
+Без `POD_ID` и `DATACENTER` процесс не стартует.
+
+Секреты через копирование `.env.example` в `.env`
+
+---
