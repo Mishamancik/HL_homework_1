@@ -37,17 +37,15 @@ docker compose up -d --build
 
 Хранилище — in-memory. Без `POD_ID` и `DATACENTER` процесс не стартует.
 
-## Один образ — три бинарника
+## Три сервиса — три образа
 
-`Dockerfile` собирает образ `hometask1-app:local` с тремя бинарями:
-
-| Бинарь | Роль | Как выбирается в compose |
+| Папка | Образ | Роль |
 |---|---|---|
-| `app` | HTTP-сервис | entrypoint по умолчанию (`app-msk`, `app-spb`) |
-| `dashboard-gen` | тянет `/handlers`, публикует non-editable дашборд | `entrypoint: dashboard-gen` |
-| `loadgen` | ramp до ~20–50 RPS на оба инстанса | `entrypoint: loadgen` |
+| `app/` | `hometask1-app:local` | HTTP CRUD + `/metrics` + `/handlers` (`app-msk`, `app-spb`) |
+| `dashboard-gen/` | `hometask1-dashboard-gen:local` | тянет `/handlers`, публикует non-editable дашборд |
+| `loadgen/` | `hometask1-loadgen:local` | ramp до ~20–50 RPS на оба инстанса |
 
-Один build — разные сервисы просто подменяют, что запускать.
+Конфиги Prometheus/Grafana — в `configs/` (bind-mount в compose).
 
 Порядок: apps → Prometheus → Grafana → `dashboard-gen` (once) → `load` (пока стек жив).
 

@@ -1,10 +1,10 @@
 services:
   app-msk:
-    build: .
+    build: ./app
     image: hometask1-app:local
     environment:
-      POD_ID: pod-msk-1
       DATACENTER: msk
+      POD_ID: msk001
       LISTEN_ADDR: ":8080"
       FAULT_500_RATE: ${FAULT_500_RATE:-0.03}
     ports:
@@ -17,11 +17,11 @@ services:
       start_period: 5s
 
   app-spb:
-    build: .
+    build: ./app
     image: hometask1-app:local
     environment:
-      POD_ID: pod-spb-1
       DATACENTER: spb
+      POD_ID: spb001
       LISTEN_ADDR: ":8080"
       FAULT_500_RATE: ${FAULT_500_RATE:-0.03}
     ports:
@@ -36,7 +36,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.54.1
     volumes:
-      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     depends_on:
@@ -59,7 +59,7 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     volumes:
-      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
     depends_on:
@@ -73,9 +73,8 @@ services:
       start_period: 10s
 
   dashboard-gen:
-    image: hometask1-app:local
-    build: .
-    entrypoint: ["/usr/local/bin/dashboard-gen"]
+    build: ./dashboard-gen
+    image: hometask1-dashboard-gen:local
     environment:
       GRAFANA_URL: http://grafana:3000
       GRAFANA_USER: ${GRAFANA_ADMIN_USER}
@@ -92,9 +91,8 @@ services:
     restart: "no"
 
   load:
-    image: hometask1-app:local
-    build: .
-    entrypoint: ["/usr/local/bin/loadgen"]
+    build: ./loadgen
+    image: hometask1-loadgen:local
     environment:
       TARGETS: http://app-msk:8080,http://app-spb:8080
       TARGET_RPS: ${TARGET_RPS:-40}
