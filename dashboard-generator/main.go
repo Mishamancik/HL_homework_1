@@ -149,6 +149,7 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 				)},
 			},
 			"reqps",
+			nil,
 		))
 		// Latency: p50 / p95 / p99
 		panels = append(panels, timeseriesPanel(
@@ -162,6 +163,7 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 				{RefID: "C", Legend: "p99", Expr: histogramQuantile(0.99, h.Handler)},
 			},
 			"s",
+			nil,
 		))
 		// Errors by status code as a share of all requests for this handler.
 		// Fixed [1m] (not $__rate_interval): right after compose restart Prometheus
@@ -181,6 +183,7 @@ func buildDashboard(handlers []handlerInfo, dsUID string) map[string]any {
 				)},
 			},
 			"percentunit",
+			errorColorOverrides(),
 		))
 		y += 8
 	}
@@ -222,28 +225,31 @@ type queryTarget struct {
 	Expr   string
 }
 
-func timeseriesPanel(id int, title string, x, y, w, h int, ds map[string]any, targets []queryTarget, unit string) map[string]any {
+func timeseriesPanel(id int, title string, x, y, w, h int, ds map[string]any, targets []queryTarget, unit string, overrides []any) map[string]any {
 	tgts := make([]any, 0, len(targets))
 	for _, t := range targets {
 		tgts = append(tgts, map[string]any{
-			"refId":         t.RefID,
-			"expr":          t.Expr,
-			"legendFormat":  t.Legend,
-			"datasource":    ds,
-			"editorMode":    "code",
-			"range":         true,
-			"instant":       false,
-			"exemplar":      false,
+			"refId":        t.RefID,
+			"expr":         t.Expr,
+			"legendFormat": t.Legend,
+			"datasource":   ds,
+			"editorMode":   "code",
+			"range":        true,
+			"instant":      false,
+			"exemplar":     false,
 		})
+	}
+	if overrides == nil {
+		overrides = []any{}
 	}
 
 	return map[string]any{
-		"id":          id,
-		"type":        "timeseries",
-		"title":       title,
-		"datasource":  ds,
-		"gridPos":     map[string]int{"x": x, "y": y, "w": w, "h": h},
-		"targets":     tgts,
+		"id":         id,
+		"type":       "timeseries",
+		"title":      title,
+		"datasource": ds,
+		"gridPos":    map[string]int{"x": x, "y": y, "w": w, "h": h},
+		"targets":    tgts,
 		"fieldConfig": map[string]any{
 			"defaults": map[string]any{
 				"unit": unit,
@@ -255,12 +261,57 @@ func timeseriesPanel(id int, title string, x, y, w, h int, ds map[string]any, ta
 					"spanNulls":   true,
 				},
 			},
-			"overrides": []any{},
+			"overrides": overrides,
 		},
 		"options": map[string]any{
 			"legend":  map[string]any{"displayMode": "list", "placement": "bottom", "showLegend": true},
 			"tooltip": map[string]any{"mode": "multi", "sort": "desc"},
 		},
+	}
+}
+
+// Fixed colors for Errors: calm greens for 4xx, alarming reds/oranges for 5xx.
+// Regex first as fallback; byName last so known codes win.
+func errorColorOverrides() []any {
+	fixed := func(name, color string) map[string]any {
+		return map[string]any{
+			"matcher": map[string]any{"id": "byName", "options": name},
+			"properties": []any{
+				map[string]any{
+					"id": "color",
+					"value": map[string]any{
+						"mode":       "fixed",
+						"fixedColor": color,
+					},
+				},
+			},
+		}
+	}
+	return []any{
+		map[string]any{
+			"matcher": map[string]any{"id": "byRegexp", "options": "/^4\\d\\d$/"},
+			"properties": []any{
+				map[string]any{
+					"id":    "color",
+					"value": map[string]any{"mode": "fixed", "fixedColor": "#6CCF8E"},
+				},
+			},
+		},
+		map[string]any{
+			"matcher": map[string]any{"id": "byRegexp", "options": "/^5\\d\\d$/"},
+			"properties": []any{
+				map[string]any{
+					"id":    "color",
+					"value": map[string]any{"mode": "fixed", "fixedColor": "#F2495C"},
+				},
+			},
+		},
+		fixed("400", "#73BF69"), // green
+		fixed("404", "#56A64B"), // darker green
+		fixed("409", "#96D98D"), // light green
+		fixed("500", "#F2495C"), // red
+		fixed("502", "#FF9830"), // orange
+		fixed("503", "#E02F44"), // deep red
 	}
 }
 
